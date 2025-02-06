@@ -1,5 +1,4 @@
 import sqlite3
-import schedule, time
 from models import connect_db, add_turn_db, get_turns_db, cancel_turn_db, update_turn_db
 from datetime import datetime, timedelta
 from reminders import reserve_reminder_email
@@ -17,6 +16,7 @@ def reserve_turn(data):
     try:
         add_turn_db(data['name'], data['last_name'], data['date'], data['hour'], data['email'], data['phone'])
         print(f"Turno reservado para {data['name']} {data['last_name']}.")
+        reserve_reminder_email(data['email'], "✔️ Reserva de turno", f"Hola {data['name']} {data['last_name']}, tu turno ha sido reservado para el día {data['date']} a las {data['hour']}.")
     except Exception as e:
         print(f"Error al reservar turno: {e}")
         

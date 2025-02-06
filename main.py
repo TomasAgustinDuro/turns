@@ -54,7 +54,7 @@ def menu():
             data = {'name': name, 'last_name': last_name, 'date': date, 'hour': hour, 'email': email, 'phone': phone}
             reserve_turn(data)
             
-            reserve_reminder_email(email, "✔️ Reserva de turno", f"Hola {name} {last_name}, tu turno ha sido reservado para el día {date} a las {hour}.")
+           
 
         # Opción 2: Mostrar turnos
         elif option == "2":
