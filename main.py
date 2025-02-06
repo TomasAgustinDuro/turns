@@ -1,6 +1,22 @@
 import sys
-from turns import reserve_turn, show_turns, delete_turn, modify_turn
+from turns import get_tomorrow_turns, reserve_turn, show_turns, delete_turn, modify_turn
 from models import initialize_db
+from reminders import reserve_reminder_email
+import threading
+import schedule, time
+
+def start_scheduler():
+    """Iniciar el planificador de tareas."""
+    schedule.every().day.at("09:00").do(get_tomorrow_turns)
+    
+    while True:
+        schedule.run_pending()
+        time.sleep(1)
+
+# Crear y arrancar el hilo del scheduler
+scheduler_thread = threading.Thread(target=start_scheduler)
+scheduler_thread.daemon = True  # Esto asegura que el hilo se cierre cuando el programa termine
+scheduler_thread.start()
 
 # Manejo de menú
 def menu():
@@ -37,6 +53,8 @@ def menu():
             phone = input("Teléfono: ")
             data = {'name': name, 'last_name': last_name, 'date': date, 'hour': hour, 'email': email, 'phone': phone}
             reserve_turn(data)
+            
+            reserve_reminder_email(email, "✔️ Reserva de turno", f"Hola {name} {last_name}, tu turno ha sido reservado para el día {date} a las {hour}.")
 
         # Opción 2: Mostrar turnos
         elif option == "2":

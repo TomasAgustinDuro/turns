@@ -1,4 +1,9 @@
-from models import add_turn_db, get_turns_db, get_turn_db, cancel_turn_db, update_turn_db
+import sqlite3
+import schedule, time
+from models import connect_db, add_turn_db, get_turns_db, cancel_turn_db, update_turn_db
+from datetime import datetime, timedelta
+from reminders import reserve_reminder_email
+
 
 # Manejo de lógica de los turnos
 
@@ -14,7 +19,7 @@ def reserve_turn(data):
         print(f"Turno reservado para {data['name']} {data['last_name']}.")
     except Exception as e:
         print(f"Error al reservar turno: {e}")
-
+        
 # Manejo de lógica de obtención de turnos
 def show_turns():
     """
@@ -58,3 +63,29 @@ def modify_turn(data, id):
         print(f"Turno con ID {id} actualizado.")
     except Exception as e:
         print(f"Error al actualizar turno: {e}")
+        
+def get_turns_by_date(date):
+    """Obtener turnos en una fecha específica."""
+    try:
+        with connect_db() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT nombre, email, hora FROM turns WHERE fecha = ?", (date,))
+            return cursor.fetchall()
+    except sqlite3.Error as e:
+        print(f"❌ Error al obtener turnos: {e}")
+        return []
+
+def get_tomorrow_turns():
+    """Buscar turnos para mañana y enviar recordatorios."""
+    tomorrow = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
+    
+    print(f"Ejecutando get_tomorrow_turns a las {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    
+    tomorrow_turns = get_turns_by_date(tomorrow)
+    
+    for name, email, hour in tomorrow_turns:
+        subject = "📅 Recordatorio de turno"
+        message = f"Hola {name}, este es un recordatorio de tu turno de mañana a las {hour}. ¡Nos vemos!"
+        reserve_reminder_email(email, subject, message)
+    
+    
