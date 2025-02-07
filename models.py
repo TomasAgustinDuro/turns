@@ -1,11 +1,45 @@
 import sqlite3
+import re
 from datetime import datetime
 
 # Conexión a la base de datos
 def connect_db():
     return sqlite3.connect('data.db')
 
-# Manejo lógica de creación de tabla de turnos
+# Validaciones
+def is_valid_email(email):
+    """Verifica que el email tenga un formato válido."""
+    pattern = r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$'
+    return re.match(pattern, email)
+
+def is_valid_phone(phone):
+    """Verifica que el teléfono contenga solo números y tenga una longitud adecuada."""
+    return phone.isdigit() and (7 <= len(phone) <= 15)
+
+def is_valid_date(date):
+    """Verifica que la fecha tenga el formato correcto (YYYY-MM-DD) y sea una fecha válida."""
+    try:
+        datetime.strptime(date, "%Y-%m-%d")
+        return True
+    except ValueError:
+        return False
+
+def is_valid_hour(hour):
+    """Verifica que la hora tenga el formato correcto (HH:MM)."""
+    try:
+        datetime.strptime(hour, "%H:%M")
+        return True
+    except ValueError:
+        return False
+
+def turno_existe(date, hour):
+    """Verifica si ya existe un turno en la misma fecha y hora."""
+    with connect_db() as conexion:
+        cursor = conexion.cursor()
+        cursor.execute("SELECT id FROM turns WHERE fecha = ? AND hora = ?", (date, hour))
+        return cursor.fetchone() is not None
+
+# Creación de la tabla si no existe
 def create_table_db():
     try:
         with connect_db() as conexion:
@@ -25,31 +59,48 @@ def create_table_db():
     except sqlite3.Error as e:
         print(f"Error al crear la tabla: {e}")
 
-# Manejo lógica de inserción de turnos
+# Inserción de turnos con validaciones
 def add_turn_db(name, last_name, date, hour, email, phone):
-    """
-    Parámetros:
-    - name (str): Nombre del cliente.
-    - last_name (str): Apellido del cliente.
-    - date (str): Fecha del turno (formato: AAAA-MM-DD).
-    - hour (str): Hora del turno (formato: HH:MM).
-    - email (str): Email del cliente.
-    - phone (str): Teléfono del cliente.
+    """Inserta un nuevo turno en la base de datos con validaciones previas."""
+    if not (name and last_name and date and hour and email and phone):
+        print("❌ Error: Todos los campos son obligatorios.")
+        return False
 
-    Retorna:
-    - None
-    """
+    if not is_valid_email(email):
+        print("❌ Error: Email inválido.")
+        return False
+
+    if not is_valid_phone(phone):
+        print("❌ Error: Teléfono inválido.")
+        return False
+
+    if not is_valid_date(date):
+        print("❌ Error: Formato de fecha incorrecto. Usa YYYY-MM-DD.")
+        return False
+
+    if not is_valid_hour(hour):
+        print("❌ Error: Formato de hora incorrecto. Usa HH:MM.")
+        return False
+
+    if turno_existe(date, hour):
+        print("❌ Error: Ya existe un turno en esa fecha y hora.")
+        return False
+
     try:
         with connect_db() as conexion:
             cursor = conexion.cursor()
             cursor.execute('''INSERT INTO turns(nombre, apellido, fecha, hora, email, telefono) 
                               VALUES(?, ?, ?, ?, ?, ?)''', (name, last_name, date, hour, email, phone))
             conexion.commit()
+            print("✅ Turno agregado correctamente.")
+            return True
     except sqlite3.Error as e:
-        print(f"Error al agregar turno: {e}")
+        print(f"❌ Error al agregar turno: {e}")
+        return False
 
-# Manejo lógica de obtención de turnos
+# Obtención de turnos
 def get_turns_db():
+    """Devuelve una lista de turnos en formato diccionario."""
     try:
         with connect_db() as conexion:
             cursor = conexion.cursor()
@@ -68,33 +119,78 @@ def get_turns_db():
             for turn in turns
         ]
     except sqlite3.Error as e:
-        print(f"Error al obtener turnos: {e}")
+        print(f"❌ Error al obtener turnos: {e}")
         return []
 
-# Manejo lógica de cancelación de turno
+# Cancelación de turnos con validación
 def cancel_turn_db(id):
-    """Cancelar un turno por su ID."""
-    try:
-        with connect_db() as conexion:
-            cursor = conexion.cursor()
+    """Cancela un turno si existe."""
+    if not id:
+        print("❌ Error: ID de turno no proporcionado.")
+        return False
+
+    with connect_db() as conexion:
+        cursor = conexion.cursor()
+        cursor.execute('SELECT id FROM turns WHERE id = ?', (id,))
+        turno = cursor.fetchone()
+
+        if turno is None:
+            print("❌ Error: No se encontró un turno con ese ID.")
+            return False
+
+        try:
             cursor.execute('DELETE FROM turns WHERE id = ?', (id,))
             conexion.commit()
-    except sqlite3.Error as e:
-        print(f"Error al cancelar turno: {e}")
+            print(f"✅ Turno con ID {id} cancelado correctamente.")
+            return True
+        except sqlite3.Error as e:
+            print(f"❌ Error al cancelar turno: {e}")
+            return False
 
-# Manejo lógica de actualización de turnos
+# Actualización de turnos con validaciones
 def update_turn_db(id, name, last_name, date, hour, email, phone):
-    try:
-        with connect_db() as conexion:
-            cursor = conexion.cursor()
+    """Actualiza un turno si cumple con las validaciones."""
+    if not (id and name and last_name and date and hour and email and phone):
+        print("❌ Error: Todos los campos son obligatorios.")
+        return False
+
+    if not is_valid_email(email):
+        print("❌ Error: Email inválido.")
+        return False
+
+    if not is_valid_phone(phone):
+        print("❌ Error: Teléfono inválido.")
+        return False
+
+    if not is_valid_date(date):
+        print("❌ Error: Formato de fecha incorrecto.")
+        return False
+
+    if not is_valid_hour(hour):
+        print("❌ Error: Formato de hora incorrecto.")
+        return False
+
+    with connect_db() as conexion:
+        cursor = conexion.cursor()
+        cursor.execute('SELECT id FROM turns WHERE id = ?', (id,))
+        turno = cursor.fetchone()
+
+        if turno is None:
+            print("❌ Error: No se encontró un turno con ese ID.")
+            return False
+
+        try:
             cursor.execute('''UPDATE turns 
                               SET nombre = ?, apellido = ?, fecha = ?, hora = ?, email = ?, telefono = ? 
                               WHERE id = ?''', (name, last_name, date, hour, email, phone, id))
             conexion.commit()
-    except sqlite3.Error as e:
-        print(f"Error al actualizar turno: {e}")
-        
-# Manejo lógica de turnos
+            print("✅ Turno actualizado correctamente.")
+            return True
+        except sqlite3.Error as e:
+            print(f"❌ Error al actualizar turno: {e}")
+            return False
+
+# Inicialización de la base de datos
 def initialize_db():
-    # Crear la tabla de turnos
+    """Inicializa la base de datos creando la tabla de turnos si no existe."""
     create_table_db()

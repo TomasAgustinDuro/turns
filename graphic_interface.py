@@ -1,11 +1,10 @@
 import tkinter as tk
 from tkinter import messagebox
 from turns import (
+    delete_turn,
     show_turns,
     reserve_turn,
-    reserve_reminder_email,
     modify_turn as modify_turn_bd,
-    cancel_turn_db,
 )
 
 
@@ -36,13 +35,17 @@ def open_reserve_turn():
     entry4 = create_entry(frame, "Hora - HH:MM:")
     entry5 = create_entry(frame, "Email:")
     entry6 = create_entry(frame, "Teléfono:")
+    
+    # Label para mostrar los errores
+    error_label = tk.Label(reserve_turn_window, text="", bg="black", fg="red")
+    error_label.pack(pady=10)
 
     tk.Button(
         reserve_turn_window,
         text="Reservar",
         bg="blue",
         fg="white",
-        command=lambda: reserve_turn(
+        command=lambda: handle_reserve(
             {
                 "name": entry1.get(),
                 "last_name": entry2.get(),
@@ -50,9 +53,20 @@ def open_reserve_turn():
                 "hour": entry4.get(),
                 "email": entry5.get(),
                 "phone": entry6.get(),
-            }
+            }, reserve_turn_window, error_label
         ),
     ).pack(pady=10)
+    
+    def handle_reserve(data, window, error_label):
+        success = reserve_turn(data)
+        if success.get("success"):
+            error_label.config(text="")
+            messagebox.showinfo("Éxito", "Turno guardado correctamente.")
+            window.destroy()  # Cierra la ventana solo si la operación fue exitosa
+        else:
+            errores = success["errors"]
+            error_text = "\n".join([f"{campo}: {mensaje}" for campo, mensaje in errores.items()])
+            error_label.config(text=error_text)  # Muestra todos los errores en la etiqueta
 
 
 def show_turn():
@@ -74,6 +88,7 @@ def show_turn():
         )
         turn_label.pack()
 
+        
 def modify_turn():
     modify_turn_window = tk.Toplevel(app)
     modify_turn_window.configure(bg="black")
@@ -88,15 +103,15 @@ def modify_turn():
     frame.pack(pady=20)
 
     date_entry = create_entry(
-        frame, "Fecha del turno que deseas modificar (YYYY-MM-DD):"
+        frame, "Nombre del paciente que tiene el turno:"
     )
 
     # Función para actualizar los turnos
     def update_turns():
         # Obtener la fecha desde el Entry
-        date_turn = date_entry.get()
+        name_turn = date_entry.get()
         turns = show_turns()
-        filtered_turns = [turn for turn in turns if turn["date"] == date_turn]
+        filtered_turns = [turn for turn in turns if turn["name"] == name_turn]
 
         # Limpiar la ventana de turnos anteriores
         for widget in modify_turn_window.winfo_children():
@@ -123,7 +138,7 @@ def modify_turn():
                 button = tk.Button(
                     modify_turn_window,
                     text=f"{turn['name']} {turn['last_name']} - {turn['hour']}",
-                    command=lambda t=turn: modify_specific_turn(t),
+                    command=lambda t=turn: modify_specific_turn(t, modify_turn_window),
                 )
                 button.pack(pady=10)
 
@@ -140,9 +155,9 @@ def modify_turn():
         command=update_turns,
     )
     update_button.pack(pady=10)
+    
 
-
-def modify_specific_turn(turn):
+def modify_specific_turn(turn, modify_turn_window):
     modify_specific_turn_window = tk.Toplevel(app)
     modify_specific_turn_window.configure(bg="black")
     modify_specific_turn_window.geometry("720x480")
@@ -167,6 +182,10 @@ def modify_specific_turn(turn):
     hour_entry = create_entry(frame, "Hora (HH:MM):", default_value=turn["hour"])
     email_entry = create_entry(frame, "Email:", default_value=turn["email"])
     phone_entry = create_entry(frame, "Teléfono:", default_value=turn["phone"])
+    
+    # Label para mostrar los errores
+    error_label = tk.Label(modify_specific_turn_window, text="", bg="black", fg="red")
+    error_label.pack(pady=10)
 
     # Función para actualizar el turno
     def submit_changes():
@@ -187,13 +206,25 @@ def modify_specific_turn(turn):
             "email": email,
             "phone": phone,
         }
+        # Validar los datos
+        if not name or not last_name or not date or not hour or not email or not phone:
+            error_label.config(text="Todos los campos deben estar completos.")
+            return  # No enviar los datos si hay campos vacíos
 
         # Llamar a la función para modificar el turno en la base de datos
-        modify_turn_bd(updated_data, turn["id"])
-        # Muestra mensaje de éxito
-        messagebox.showinfo("Éxito", "Turno modificado correctamente.")
-        modify_specific_turn_window.destroy() # Cerrar la ventana después de modificar
-        modify_turn.destroy()
+        success = modify_turn_bd(updated_data, turn["id"])
+
+        if success.get("success"):
+            error_label.config(text="")
+            messagebox.showinfo("Éxito", "Turno modificado correctamente.")
+            modify_specific_turn_window.destroy()  # Cerrar la ventana después de modificar
+            modify_turn_window.destroy()  # Cerrar la ventana de modificar turnos
+        else:
+            errores = success["errors"]
+            error_text = "\n".join([f"{campo}: {mensaje}" for campo, mensaje in errores.items()])
+            error_label.config(text=error_text)  # Muestra todos los errores en la etiqueta
+
+       
 
     # Crear un botón para enviar los cambios
     submit_button = tk.Button(
@@ -205,8 +236,6 @@ def modify_specific_turn(turn):
     )
     submit_button.pack(pady=10)
     
-
-
 
 def cancel_turn():
     cancel_turn_window = tk.Toplevel(app)
@@ -221,13 +250,13 @@ def cancel_turn():
     frame.pack(pady=20)
 
     date_entry = create_entry(
-        frame, "Fecha del turno que deseas modificar (YYYY-MM-DD):"
+        frame, "Nombre del paciente que quiere cancelar el turno:"
     )
 
     def search_turns():
-        date_turn = date_entry.get()
+        name_turn = date_entry.get()
         turns = show_turns()
-        filtered_turns = [turn for turn in turns if turn["date"] == date_turn]
+        filtered_turns = [turn for turn in turns if turn["name"] == name_turn]
 
         # Limpiar la ventana de turnos anteriores
         for widget in cancel_turn_window.winfo_children():
@@ -254,17 +283,24 @@ def cancel_turn():
                 button = tk.Button(
                     cancel_turn_window,
                     text=f"{turn['name']} {turn['last_name']} - {turn['hour']}",
-                    command=lambda turn_id=turn['id']: cancel_turn_db(turn_id),
+                    command=lambda turn_id=turn['id'], turn_name=turn['name'], turn_last_name=turn['last_name'], turn_email=turn['email']: handle_cancel(turn_id, turn_name, turn_last_name, turn_email, cancel_turn_window),
                 )
                 button.pack(pady=10)
-                
-                cancel_turn_window.destroy()    
-                # Muestra mensaje de éxito
-                messagebox.showinfo("Éxito", "Turno eliminado correctamente.")
+                    
 
-                
-     # Botón para buscar turnos después de ingresar la fecha
     
+    
+    # Función para manejar la cancelación y el cierre de la ventana
+   
+    def handle_cancel(turn_id, turn_name, turn_email, turn_last_name, window):
+        success = delete_turn(turn_id, turn_name, turn_email, turn_last_name)
+        if success:
+            messagebox.showinfo("Éxito", "Turno eliminado correctamente.")
+            window.destroy()  # 🔹 Cierra la ventana solo si la operación fue exitosa
+        else:
+            messagebox.showerror("Error", "No se pudo eliminar el turno.")
+            
+    # Botón para buscar turnos después de ingresar la fecha
     search_button = tk.Button(cancel_turn_window, text="Buscar Turnos", command=search_turns)
     search_button.pack(pady=10)
 
@@ -294,5 +330,10 @@ button4 = tk.Button(
     app, text="Cancelar turno", bg="blue", fg="white", command=cancel_turn
 )
 button4.pack(fill=tk.X)
+
+button5 = tk.Button(
+    app, text="Salir", bg="blue", fg="white", command=lambda: app.destroy() 
+)
+button5.pack(fill=tk.X)
 
 app.mainloop()
