@@ -21,9 +21,10 @@ def validate_turn_data(data):
         turn_date = datetime.strptime(data["date"], "%Y-%m-%d").date()
         if turn_date < datetime.today().date():
             errors["date"] = "La fecha no puede ser anterior a hoy."
+        elif turn_date == datetime.today().date():
+            errors["date"] = "La fecha debe ser al menos un día posterior al día de hoy."
     except ValueError:
         errors["date"] = "Formato de fecha inválido (debe ser YYYY-MM-DD)."
-
     # Validación de hora
     try:
         datetime.strptime(data["hour"], "%H:%M")
